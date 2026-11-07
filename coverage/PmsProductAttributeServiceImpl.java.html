@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PmsProductAttributeServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mall-admin</a> &gt; <a href="index.source.html" class="el_package">com.macro.mall.service.impl</a> &gt; <span class="el_source">PmsProductAttributeServiceImpl.java</span></div><h1>PmsProductAttributeServiceImpl.java</h1><pre class="source lang-java linenums">package com.macro.mall.service.impl;
+
+import com.github.pagehelper.PageHelper;
+import com.macro.mall.dao.PmsProductAttributeDao;
+import com.macro.mall.dto.PmsProductAttributeParam;
+import com.macro.mall.dto.ProductAttrInfo;
+import com.macro.mall.mapper.PmsProductAttributeCategoryMapper;
+import com.macro.mall.mapper.PmsProductAttributeMapper;
+import com.macro.mall.model.PmsProductAttribute;
+import com.macro.mall.model.PmsProductAttributeCategory;
+import com.macro.mall.model.PmsProductAttributeExample;
+import com.macro.mall.service.PmsProductAttributeService;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * 商品属性管理Service实现类
+ * Created by macro on 2018/4/26.
+ */
+@Service
+<span class="fc" id="L30">public class PmsProductAttributeServiceImpl implements PmsProductAttributeService {</span>
+    @Autowired
+    private PmsProductAttributeMapper productAttributeMapper;
+    @Autowired
+    private PmsProductAttributeCategoryMapper productAttributeCategoryMapper;
+    @Autowired
+    private PmsProductAttributeDao productAttributeDao;
+
+    @Override
+    public List&lt;PmsProductAttribute&gt; getList(Long cid, Integer type, Integer pageSize, Integer pageNum) {
+<span class="nc" id="L40">        PageHelper.startPage(pageNum, pageSize);</span>
+<span class="nc" id="L41">        PmsProductAttributeExample example = new PmsProductAttributeExample();</span>
+<span class="nc" id="L42">        example.setOrderByClause(&quot;sort desc&quot;);</span>
+<span class="nc" id="L43">        example.createCriteria().andProductAttributeCategoryIdEqualTo(cid).andTypeEqualTo(type);</span>
+<span class="nc" id="L44">        return productAttributeMapper.selectByExample(example);</span>
+    }
+
+    @Override
+    public int create(PmsProductAttributeParam pmsProductAttributeParam) {
+<span class="nc" id="L49">        PmsProductAttribute pmsProductAttribute = new PmsProductAttribute();</span>
+<span class="nc" id="L50">        BeanUtils.copyProperties(pmsProductAttributeParam, pmsProductAttribute);</span>
+<span class="nc" id="L51">        int count = productAttributeMapper.insertSelective(pmsProductAttribute);</span>
+        //新增商品属性以后需要更新商品属性分类数量
+<span class="nc" id="L53">        PmsProductAttributeCategory pmsProductAttributeCategory = productAttributeCategoryMapper.selectByPrimaryKey(pmsProductAttribute.getProductAttributeCategoryId());</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">        if(pmsProductAttribute.getType()==0){</span>
+<span class="nc" id="L55">            pmsProductAttributeCategory.setAttributeCount(pmsProductAttributeCategory.getAttributeCount()+1);</span>
+<span class="nc bnc" id="L56" title="All 2 branches missed.">        }else if(pmsProductAttribute.getType()==1){</span>
+<span class="nc" id="L57">            pmsProductAttributeCategory.setParamCount(pmsProductAttributeCategory.getParamCount()+1);</span>
+        }
+<span class="nc" id="L59">        productAttributeCategoryMapper.updateByPrimaryKey(pmsProductAttributeCategory);</span>
+<span class="nc" id="L60">        return count;</span>
+    }
+
+    @Override
+    public int update(Long id, PmsProductAttributeParam productAttributeParam) {
+<span class="nc" id="L65">        PmsProductAttribute pmsProductAttribute = new PmsProductAttribute();</span>
+<span class="nc" id="L66">        pmsProductAttribute.setId(id);</span>
+<span class="nc" id="L67">        BeanUtils.copyProperties(productAttributeParam, pmsProductAttribute);</span>
+<span class="nc" id="L68">        return productAttributeMapper.updateByPrimaryKeySelective(pmsProductAttribute);</span>
+    }
+
+    @Override
+    public PmsProductAttribute getItem(Long id) {
+<span class="nc" id="L73">        return productAttributeMapper.selectByPrimaryKey(id);</span>
+    }
+
+    @Override
+    public int delete(List&lt;Long&gt; ids) {
+<span class="pc bpc" id="L78" title="1 of 4 branches missed.">        if (ids == null || ids.isEmpty()) {</span>
+<span class="fc" id="L79">            return 0;</span>
+        }
+        //重复 ID 只算一次，null 不参与查询
+<span class="fc" id="L82">        List&lt;Long&gt; distinctIds = new ArrayList&lt;&gt;(new LinkedHashSet&lt;&gt;(ids));</span>
+<span class="fc" id="L83">        distinctIds.removeIf(Objects::isNull);</span>
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">        if (distinctIds.isEmpty()) {</span>
+<span class="nc" id="L85">            return 0;</span>
+        }
+<span class="fc" id="L87">        PmsProductAttributeExample example = new PmsProductAttributeExample();</span>
+<span class="fc" id="L88">        example.createCriteria().andIdIn(distinctIds);</span>
+        //先取实际存在的属性：不存在的 ID 不扣减，全部不存在时不产生任何写操作
+<span class="fc" id="L90">        List&lt;PmsProductAttribute&gt; attributes = productAttributeMapper.selectByExample(example);</span>
+<span class="fc bfc" id="L91" title="All 2 branches covered.">        if (attributes.isEmpty()) {</span>
+<span class="fc" id="L92">            return 0;</span>
+        }
+        //按“分类 + 类型”分别汇总，规格进 attributeCountMap，参数进 paramCountMap
+<span class="fc" id="L95">        Map&lt;Long, Integer&gt; attributeCountMap = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L96">        Map&lt;Long, Integer&gt; paramCountMap = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        for (PmsProductAttribute attribute : attributes) {</span>
+<span class="fc" id="L98">            Long categoryId = attribute.getProductAttributeCategoryId();</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">            if (categoryId == null) {</span>
+<span class="nc" id="L100">                continue;</span>
+            }
+<span class="fc bfc" id="L102" title="All 2 branches covered.">            if (Integer.valueOf(0).equals(attribute.getType())) {</span>
+<span class="fc" id="L103">                attributeCountMap.merge(categoryId, 1, Integer::sum);</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">            } else if (Integer.valueOf(1).equals(attribute.getType())) {</span>
+<span class="fc" id="L105">                paramCountMap.merge(categoryId, 1, Integer::sum);</span>
+            }
+<span class="fc" id="L107">        }</span>
+<span class="fc" id="L108">        int count = productAttributeMapper.deleteByExample(example);</span>
+        //删除完成后逐分类扣减，只更新确实有计数变化的分类
+<span class="fc" id="L110">        Set&lt;Long&gt; categoryIds = new LinkedHashSet&lt;&gt;();</span>
+<span class="fc" id="L111">        categoryIds.addAll(attributeCountMap.keySet());</span>
+<span class="fc" id="L112">        categoryIds.addAll(paramCountMap.keySet());</span>
+<span class="fc bfc" id="L113" title="All 2 branches covered.">        for (Long categoryId : categoryIds) {</span>
+<span class="fc" id="L114">            PmsProductAttributeCategory category = productAttributeCategoryMapper.selectByPrimaryKey(categoryId);</span>
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">            if (category == null) {</span>
+<span class="nc" id="L116">                continue;</span>
+            }
+<span class="fc" id="L118">            Integer attributeCount = attributeCountMap.get(categoryId);</span>
+<span class="pc bpc" id="L119" title="1 of 2 branches missed.">            if (attributeCount != null) {</span>
+<span class="fc" id="L120">                category.setAttributeCount(decrease(category.getAttributeCount(), attributeCount));</span>
+            }
+<span class="fc" id="L122">            Integer paramCount = paramCountMap.get(categoryId);</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">            if (paramCount != null) {</span>
+<span class="fc" id="L124">                category.setParamCount(decrease(category.getParamCount(), paramCount));</span>
+            }
+<span class="fc" id="L126">            productAttributeCategoryMapper.updateByPrimaryKey(category);</span>
+<span class="fc" id="L127">        }</span>
+<span class="fc" id="L128">        return count;</span>
+    }
+
+    private int decrease(Integer current, int delta) {
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if (current == null) {</span>
+<span class="nc" id="L133">            return 0;</span>
+        }
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        return current &gt;= delta ? current - delta : 0;</span>
+    }
+
+    @Override
+    public List&lt;ProductAttrInfo&gt; getProductAttrInfo(Long productCategoryId) {
+<span class="nc" id="L140">        return productAttributeDao.getProductAttrInfo(productCategoryId);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

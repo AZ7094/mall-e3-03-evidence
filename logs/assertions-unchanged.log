@@ -1,0 +1,18 @@
+# 测试文件在“改前红”与“改后绿”两个提交上完全一致
+# 生成时间: 2026-11-07 10:49:54 +0800
+
+## 1) 两个提交各自的测试文件 SHA-256
+4968126 (test)  1237d982e396ef788d25eab6084064f767c592f3434eb1b14826816786b81d5e *-
+1c07a36 (fix)   1237d982e396ef788d25eab6084064f767c592f3434eb1b14826816786b81d5e *-
+working tree    1237d982e396ef788d25eab6084064f767c592f3434eb1b14826816786b81d5e *mall-admin/src/test/java/com/macro/mall/service/impl/PmsProductAttributeDeleteSpecTest.java
+
+## 2) 两提交之间测试文件的 git diff（应为空）
+(diff 结束，行数=0)
+
+## 3) 断言强度
+assertEquals 次数: 14
+assertNotNull/assertTrue/assertFalse 次数: 2
+verify(..., never()) 次数: 7
+
+## 4) 红/绿运行使用的测试文件哈希对照（见 red-run-baseline.log / green-run.log 顶部命令）
+1237d982e396ef788d25eab6084064f767c592f3434eb1b14826816786b81d5e *mall-admin/src/test/java/com/macro/mall/service/impl/PmsProductAttributeDeleteSpecTest.java

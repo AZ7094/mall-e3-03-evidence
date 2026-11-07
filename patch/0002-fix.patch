@@ -1,0 +1,426 @@
+From 1c07a36c7b05adc4e400f2614943591fba151fce Mon Sep 17 00:00:00 2001
+From: Sunshin <2662058457@qq.com>
+Date: Sat, 7 Nov 2026 10:43:35 +0800
+Subject: [PATCH] fix(e3-03): decrement counts per category and type on batch
+ delete
+
+---
+ .../evidence/ai-draft-delete-service.java.txt | 109 ++++++++++
+ docs/e3-03/evidence/ai-draft-run.log          | 186 ++++++++++++++++++
+ .../impl/PmsProductAttributeServiceImpl.java  |  75 +++++--
+ 3 files changed, 353 insertions(+), 17 deletions(-)
+ create mode 100644 docs/e3-03/evidence/ai-draft-delete-service.java.txt
+ create mode 100644 docs/e3-03/evidence/ai-draft-run.log
+
+diff --git a/docs/e3-03/evidence/ai-draft-delete-service.java.txt b/docs/e3-03/evidence/ai-draft-delete-service.java.txt
+new file mode 100644
+index 0000000..45b5a09
+--- /dev/null
++++ b/docs/e3-03/evidence/ai-draft-delete-service.java.txt
+@@ -0,0 +1,109 @@
++package com.macro.mall.service.impl;
++
++import com.github.pagehelper.PageHelper;
++import com.macro.mall.dao.PmsProductAttributeDao;
++import com.macro.mall.dto.PmsProductAttributeParam;
++import com.macro.mall.dto.ProductAttrInfo;
++import com.macro.mall.mapper.PmsProductAttributeCategoryMapper;
++import com.macro.mall.mapper.PmsProductAttributeMapper;
++import com.macro.mall.model.PmsProductAttribute;
++import com.macro.mall.model.PmsProductAttributeCategory;
++import com.macro.mall.model.PmsProductAttributeExample;
++import com.macro.mall.service.PmsProductAttributeService;
++import org.springframework.beans.BeanUtils;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Service;
++
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Objects;
++import java.util.stream.Collectors;
++
++/**
++ * å•†å“å±æ€§ç®¡ç†Serviceå®ç°ç±»
++ * Created by macro on 2018/4/26.
++ */
++@Service
++public class PmsProductAttributeServiceImpl implements PmsProductAttributeService {
++    @Autowired
++    private PmsProductAttributeMapper productAttributeMapper;
++    @Autowired
++    private PmsProductAttributeCategoryMapper productAttributeCategoryMapper;
++    @Autowired
++    private PmsProductAttributeDao productAttributeDao;
++
++    @Override
++    public List<PmsProductAttribute> getList(Long cid, Integer type, Integer pageSize, Integer pageNum) {
++        PageHelper.startPage(pageNum, pageSize);
++        PmsProductAttributeExample example = new PmsProductAttributeExample();
++        example.setOrderByClause("sort desc");
++        example.createCriteria().andProductAttributeCategoryIdEqualTo(cid).andTypeEqualTo(type);
++        return productAttributeMapper.selectByExample(example);
++    }
++
++    @Override
++    public int create(PmsProductAttributeParam pmsProductAttributeParam) {
++        PmsProductAttribute pmsProductAttribute = new PmsProductAttribute();
++        BeanUtils.copyProperties(pmsProductAttributeParam, pmsProductAttribute);
++        int count = productAttributeMapper.insertSelective(pmsProductAttribute);
++        //æ–°å¢å•†å“å±æ€§ä»¥åéœ€è¦æ›´æ–°å•†å“å±æ€§åˆ†ç±»æ•°é‡
++        PmsProductAttributeCategory pmsProductAttributeCategory = productAttributeCategoryMapper.selectByPrimaryKey(pmsProductAttribute.getProductAttributeCategoryId());
++        if(pmsProductAttribute.getType()==0){
++            pmsProductAttributeCategory.setAttributeCount(pmsProductAttributeCategory.getAttributeCount()+1);
++        }else if(pmsProductAttribute.getType()==1){
++            pmsProductAttributeCategory.setParamCount(pmsProductAttributeCategory.getParamCount()+1);
++        }
++        productAttributeCategoryMapper.updateByPrimaryKey(pmsProductAttributeCategory);
++        return count;
++    }
++
++    @Override
++    public int update(Long id, PmsProductAttributeParam productAttributeParam) {
++        PmsProductAttribute pmsProductAttribute = new PmsProductAttribute();
++        pmsProductAttribute.setId(id);
++        BeanUtils.copyProperties(productAttributeParam, pmsProductAttribute);
++        return productAttributeMapper.updateByPrimaryKeySelective(pmsProductAttribute);
++    }
++
++    @Override
++    public PmsProductAttribute getItem(Long id) {
++        return productAttributeMapper.selectByPrimaryKey(id);
++    }
++
++    @Override
++    public int delete(List<Long> ids) {
++        // AI åˆç¨¿ v1ï¼šå…ˆæŒ‰ ID å»é‡ã€æŸ¥å‡ºçœŸå®å­˜åœ¨çš„å±æ€§ï¼Œå†æŒ‰åˆ†ç±»æ±‡æ€»åˆ é™¤æ•°é‡
++        if (ids == null || ids.isEmpty()) {
++            return 0;
++        }
++        List<Long> distinctIds = ids.stream().filter(Objects::nonNull).distinct().collect(Collectors.toList());
++        if (distinctIds.isEmpty()) {
++            return 0;
++        }
++        PmsProductAttributeExample example = new PmsProductAttributeExample();
++        example.createCriteria().andIdIn(distinctIds);
++        List<PmsProductAttribute> attributes = productAttributeMapper.selectByExample(example);
++        Map<Long, Integer> countMap = new HashMap<>();
++        for (PmsProductAttribute attribute : attributes) {
++            countMap.merge(attribute.getProductAttributeCategoryId(), 1, Integer::sum);
++        }
++        int count = productAttributeMapper.deleteByExample(example);
++        //åˆ é™¤å®Œæˆåä¿®æ”¹æ•°é‡
++        for (Map.Entry<Long, Integer> entry : countMap.entrySet()) {
++            PmsProductAttributeCategory category = productAttributeCategoryMapper.selectByPrimaryKey(entry.getKey());
++            if (category.getAttributeCount() >= entry.getValue()) {
++                category.setAttributeCount(category.getAttributeCount() - entry.getValue());
++            } else {
++                category.setAttributeCount(0);
++            }
++            productAttributeCategoryMapper.updateByPrimaryKey(category);
++        }
++        return count;
++    }
++
++    @Override
++    public List<ProductAttrInfo> getProductAttrInfo(Long productCategoryId) {
++        return productAttributeDao.getProductAttrInfo(productCategoryId);
++    }
++}
+diff --git a/docs/e3-03/evidence/ai-draft-run.log b/docs/e3-03/evidence/ai-draft-run.log
+new file mode 100644
+index 0000000..0008c4b
+--- /dev/null
++++ b/docs/e3-03/evidence/ai-draft-run.log
+@@ -0,0 +1,186 @@
++[INFO] Scanning for projects...
++[INFO] ------------------------------------------------------------------------
++[INFO] Reactor Build Order:
++[INFO] 
++[INFO] mall                                                               [pom]
++[INFO] mall-common                                                        [jar]
++[INFO] mall-mbg                                                           [jar]
++[INFO] mall-security                                                      [jar]
++[INFO] mall-admin                                                         [jar]
++[INFO] 
++[INFO] ------------------------< com.macro.mall:mall >-------------------------
++[INFO] Building mall 1.0-SNAPSHOT                                         [1/5]
++[INFO]   from pom.xml
++[INFO] --------------------------------[ pom ]---------------------------------
++[INFO] 
++[INFO] ---------------------< com.macro.mall:mall-common >---------------------
++[INFO] Building mall-common 1.0-SNAPSHOT                                  [2/5]
++[INFO]   from mall-common\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-common ---
++[INFO] Copying 0 resource from src\main\resources to target\classes
++[INFO] Copying 1 resource from src\main\resources to target\classes
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-common ---
++[INFO] Nothing to compile - all classes are up to date.
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-common ---
++[INFO] skip non existing resourceDirectory E:\´óÈı×÷Òµ\mall-e3\mall-common\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-common ---
++[INFO] No sources to compile
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-common ---
++[INFO] No tests to run.
++[INFO] 
++[INFO] ----------------------< com.macro.mall:mall-mbg >-----------------------
++[INFO] Building mall-mbg 1.0-SNAPSHOT                                     [3/5]
++[INFO]   from mall-mbg\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-mbg ---
++[INFO] Copying 0 resource from src\main\resources to target\classes
++[INFO] Copying 78 resources from src\main\resources to target\classes
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-mbg ---
++[INFO] Nothing to compile - all classes are up to date.
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-mbg ---
++[INFO] skip non existing resourceDirectory E:\´óÈı×÷Òµ\mall-e3\mall-mbg\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-mbg ---
++[INFO] No sources to compile
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-mbg ---
++[INFO] No tests to run.
++[INFO] 
++[INFO] --------------------< com.macro.mall:mall-security >--------------------
++[INFO] Building mall-security 1.0-SNAPSHOT                                [4/5]
++[INFO]   from mall-security\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-security ---
++[INFO] skip non existing resourceDirectory E:\´óÈı×÷Òµ\mall-e3\mall-security\src\main\resources
++[INFO] skip non existing resourceDirectory E:\´óÈı×÷Òµ\mall-e3\mall-security\src\main\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-security ---
++[INFO] Nothing to compile - all classes are up to date.
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-security ---
++[INFO] skip non existing resourceDirectory E:\´óÈı×÷Òµ\mall-e3\mall-security\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-security ---
++[INFO] No sources to compile
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-security ---
++[INFO] No tests to run.
++[INFO] 
++[INFO] ---------------------< com.macro.mall:mall-admin >----------------------
++[INFO] Building mall-admin 1.0-SNAPSHOT                                   [5/5]
++[INFO]   from mall-admin\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-admin ---
++[INFO] Copying 3 resources from src\main\resources to target\classes
++[INFO] Copying 23 resources from src\main\resources to target\classes
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-admin ---
++[INFO] Recompiling the module because of changed source code.
++[INFO] Compiling 153 source files with javac [debug parameters release 17] to target\classes
++[WARNING] /E:/´óÈı×÷Òµ/mall-e3/mall-admin/src/main/java/com/macro/mall/dto/PmsProductParam.java:[15,1] Generating equals/hashCode implementation but without a call to superclass, even though this class does not extend java.lang.Object. If this is intentional, add '@EqualsAndHashCode(callSuper=false)' to your type.
++[INFO] /E:/´óÈı×÷Òµ/mall-e3/mall-admin/src/main/java/com/macro/mall/config/MallSecurityConfig.java: Ä³Ğ©ÊäÈëÎÄ¼şÊ¹ÓÃ»ò¸²¸ÇÁËÒÑ¹ıÊ±µÄ API¡£
++[INFO] /E:/´óÈı×÷Òµ/mall-e3/mall-admin/src/main/java/com/macro/mall/config/MallSecurityConfig.java: ÓĞ¹ØÏêÏ¸ĞÅÏ¢, ÇëÊ¹ÓÃ -Xlint:deprecation ÖØĞÂ±àÒë¡£
++[INFO] /E:/´óÈı×÷Òµ/mall-e3/mall-admin/src/main/java/com/macro/mall/service/impl/UmsAdminCacheServiceImpl.java: E:\´óÈı×÷Òµ\mall-e3\mall-admin\src\main\java\com\macro\mall\service\impl\UmsAdminCacheServiceImpl.javaÊ¹ÓÃÁËÎ´¾­¼ì²é»ò²»°²È«µÄ²Ù×÷¡£
++[INFO] /E:/´óÈı×÷Òµ/mall-e3/mall-admin/src/main/java/com/macro/mall/service/impl/UmsAdminCacheServiceImpl.java: ÓĞ¹ØÏêÏ¸ĞÅÏ¢, ÇëÊ¹ÓÃ -Xlint:unchecked ÖØĞÂ±àÒë¡£
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-admin ---
++[INFO] skip non existing resourceDirectory E:\´óÈı×÷Òµ\mall-e3\mall-admin\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-admin ---
++[INFO] Recompiling the module because of changed dependency.
++[INFO] Compiling 1 source file with javac [debug parameters release 17] to target\test-classes
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-admin ---
++[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
++[INFO] 
++[INFO] -------------------------------------------------------
++[INFO]  T E S T S
++[INFO] -------------------------------------------------------
++[INFO] Running com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest
++OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
++[ERROR] Tests run: 7, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 1.587 s <<< FAILURE! -- in com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest
++[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters -- Time elapsed: 0.018 s <<< FAILURE!
++org.opentest4j.AssertionFailedError: ·ÖÀà 30 µÄ param_count ==> expected: <0> but was: <1>
++	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
++	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
++	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
++	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
++	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:590)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.assertCategoryCounts(PmsProductAttributeDeleteSpecTest.java:195)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters(PmsProductAttributeDeleteSpecTest.java:100)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++
++[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting -- Time elapsed: 0.020 s <<< FAILURE!
++org.mockito.exceptions.verification.NeverWantedButInvoked: 
++
++productAttributeMapper.deleteByExample(
++    <any>
++);
++Never wanted here:
++-> at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting(PmsProductAttributeDeleteSpecTest.java:131)
++But invoked here:
++-> at com.macro.mall.service.impl.PmsProductAttributeServiceImpl.delete(PmsProductAttributeServiceImpl.java:91) with arguments: [com.macro.mall.model.PmsProductAttributeExample@660591fb]
++
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting(PmsProductAttributeDeleteSpecTest.java:131)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++
++[INFO] 
++[INFO] Results:
++[INFO] 
++[ERROR] Failures: 
++[ERROR]   PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting:131 
++productAttributeMapper.deleteByExample(
++    <any>
++);
++Never wanted here:
++-> at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting(PmsProductAttributeDeleteSpecTest.java:131)
++But invoked here:
++-> at com.macro.mall.service.impl.PmsProductAttributeServiceImpl.delete(PmsProductAttributeServiceImpl.java:91) with arguments: [com.macro.mall.model.PmsProductAttributeExample@660591fb]
++
++[ERROR]   PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters:100->assertCategoryCounts:195 ·ÖÀà 30 µÄ param_count ==> expected: <0> but was: <1>
++[INFO] 
++[ERROR] Tests run: 7, Failures: 2, Errors: 0, Skipped: 0
++[INFO] 
++[INFO] ------------------------------------------------------------------------
++[INFO] Reactor Summary for mall 1.0-SNAPSHOT:
++[INFO] 
++[INFO] mall ............................................... SUCCESS [  0.004 s]
++[INFO] mall-common ........................................ SUCCESS [  2.532 s]
++[INFO] mall-mbg ........................................... SUCCESS [  1.381 s]
++[INFO] mall-security ...................................... SUCCESS [  0.508 s]
++[INFO] mall-admin ......................................... FAILURE [ 19.213 s]
++[INFO] ------------------------------------------------------------------------
++[INFO] BUILD FAILURE
++[INFO] ------------------------------------------------------------------------
++[INFO] Total time:  24.172 s
++[INFO] Finished at: 2026-11-07T10:42:23+08:00
++[INFO] ------------------------------------------------------------------------
++[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.5:test (default-test) on project mall-admin: There are test failures.
++[ERROR] 
++[ERROR] See E:\´óÈı×÷Òµ\mall-e3\mall-admin\target\surefire-reports for the individual test results.
++[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
++[ERROR] -> [Help 1]
++[ERROR] 
++[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
++[ERROR] Re-run Maven using the -X switch to enable full debug logging.
++[ERROR] 
++[ERROR] For more information about the errors and possible solutions, please read the following articles:
++[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
++[ERROR] 
++[ERROR] After correcting the problems, you can resume the build with the command
++[ERROR]   mvn <args> -rf :mall-admin
+diff --git a/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java b/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java
+index d8e21bc..653ea98 100644
+--- a/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java
++++ b/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java
+@@ -14,7 +14,13 @@ import org.springframework.beans.BeanUtils;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.stereotype.Service;
+ 
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
++import java.util.Map;
++import java.util.Objects;
++import java.util.Set;
+ 
+ /**
+  * å•†å“å±æ€§ç®¡ç†Serviceå®ç°ç±»
+@@ -69,31 +75,66 @@ public class PmsProductAttributeServiceImpl implements PmsProductAttributeServic
+ 
+     @Override
+     public int delete(List<Long> ids) {
+-        //è·å–åˆ†ç±»
+-        PmsProductAttribute pmsProductAttribute = productAttributeMapper.selectByPrimaryKey(ids.get(0));
+-        Integer type = pmsProductAttribute.getType();
+-        PmsProductAttributeCategory pmsProductAttributeCategory = productAttributeCategoryMapper.selectByPrimaryKey(pmsProductAttribute.getProductAttributeCategoryId());
++        if (ids == null || ids.isEmpty()) {
++            return 0;
++        }
++        //é‡å¤ ID åªç®—ä¸€æ¬¡ï¼Œnull ä¸å‚ä¸æŸ¥è¯¢
++        List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(ids));
++        distinctIds.removeIf(Objects::isNull);
++        if (distinctIds.isEmpty()) {
++            return 0;
++        }
+         PmsProductAttributeExample example = new PmsProductAttributeExample();
+-        example.createCriteria().andIdIn(ids);
++        example.createCriteria().andIdIn(distinctIds);
++        //å…ˆå–å®é™…å­˜åœ¨çš„å±æ€§ï¼šä¸å­˜åœ¨çš„ ID ä¸æ‰£å‡ï¼Œå…¨éƒ¨ä¸å­˜åœ¨æ—¶ä¸äº§ç”Ÿä»»ä½•å†™æ“ä½œ
++        List<PmsProductAttribute> attributes = productAttributeMapper.selectByExample(example);
++        if (attributes.isEmpty()) {
++            return 0;
++        }
++        //æŒ‰â€œåˆ†ç±» + ç±»å‹â€åˆ†åˆ«æ±‡æ€»ï¼Œè§„æ ¼è¿› attributeCountMapï¼Œå‚æ•°è¿› paramCountMap
++        Map<Long, Integer> attributeCountMap = new HashMap<>();
++        Map<Long, Integer> paramCountMap = new HashMap<>();
++        for (PmsProductAttribute attribute : attributes) {
++            Long categoryId = attribute.getProductAttributeCategoryId();
++            if (categoryId == null) {
++                continue;
++            }
++            if (Integer.valueOf(0).equals(attribute.getType())) {
++                attributeCountMap.merge(categoryId, 1, Integer::sum);
++            } else if (Integer.valueOf(1).equals(attribute.getType())) {
++                paramCountMap.merge(categoryId, 1, Integer::sum);
++            }
++        }
+         int count = productAttributeMapper.deleteByExample(example);
+-        //åˆ é™¤å®Œæˆåä¿®æ”¹æ•°é‡
+-        if(type==0){
+-            if(pmsProductAttributeCategory.getAttributeCount()>=count){
+-                pmsProductAttributeCategory.setAttributeCount(pmsProductAttributeCategory.getAttributeCount()-count);
+-            }else{
+-                pmsProductAttributeCategory.setAttributeCount(0);
++        //åˆ é™¤å®Œæˆåé€åˆ†ç±»æ‰£å‡ï¼Œåªæ›´æ–°ç¡®å®æœ‰è®¡æ•°å˜åŒ–çš„åˆ†ç±»
++        Set<Long> categoryIds = new LinkedHashSet<>();
++        categoryIds.addAll(attributeCountMap.keySet());
++        categoryIds.addAll(paramCountMap.keySet());
++        for (Long categoryId : categoryIds) {
++            PmsProductAttributeCategory category = productAttributeCategoryMapper.selectByPrimaryKey(categoryId);
++            if (category == null) {
++                continue;
++            }
++            Integer attributeCount = attributeCountMap.get(categoryId);
++            if (attributeCount != null) {
++                category.setAttributeCount(decrease(category.getAttributeCount(), attributeCount));
+             }
+-        }else if(type==1){
+-            if(pmsProductAttributeCategory.getParamCount()>=count){
+-                pmsProductAttributeCategory.setParamCount(pmsProductAttributeCategory.getParamCount()-count);
+-            }else{
+-                pmsProductAttributeCategory.setParamCount(0);
++            Integer paramCount = paramCountMap.get(categoryId);
++            if (paramCount != null) {
++                category.setParamCount(decrease(category.getParamCount(), paramCount));
+             }
++            productAttributeCategoryMapper.updateByPrimaryKey(category);
+         }
+-        productAttributeCategoryMapper.updateByPrimaryKey(pmsProductAttributeCategory);
+         return count;
+     }
+ 
++    private int decrease(Integer current, int delta) {
++        if (current == null) {
++            return 0;
++        }
++        return current >= delta ? current - delta : 0;
++    }
++
+     @Override
+     public List<ProductAttrInfo> getProductAttrInfo(Long productCategoryId) {
+         return productAttributeDao.getProductAttrInfo(productCategoryId);
+-- 
+2.56.0.windows.2
+

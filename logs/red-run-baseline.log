@@ -1,0 +1,203 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] mall                                                               [pom]
+[INFO] mall-common                                                        [jar]
+[INFO] mall-mbg                                                           [jar]
+[INFO] mall-security                                                      [jar]
+[INFO] mall-admin                                                         [jar]
+[INFO] 
+[INFO] ------------------------< com.macro.mall:mall >-------------------------
+[INFO] Building mall 1.0-SNAPSHOT                                         [1/5]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ---------------------< com.macro.mall:mall-common >---------------------
+[INFO] Building mall-common 1.0-SNAPSHOT                                  [2/5]
+[INFO]   from mall-common\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mall-common ---
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-common ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-common ---
+[INFO] skip non existing resourceDirectory E:\大三作业\mall-e3\mall-common\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-common ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.5:test (default-test) @ mall-common ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ----------------------< com.macro.mall:mall-mbg >-----------------------
+[INFO] Building mall-mbg 1.0-SNAPSHOT                                     [3/5]
+[INFO]   from mall-mbg\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mall-mbg ---
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] Copying 78 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-mbg ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-mbg ---
+[INFO] skip non existing resourceDirectory E:\大三作业\mall-e3\mall-mbg\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-mbg ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.5:test (default-test) @ mall-mbg ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] --------------------< com.macro.mall:mall-security >--------------------
+[INFO] Building mall-security 1.0-SNAPSHOT                                [4/5]
+[INFO]   from mall-security\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mall-security ---
+[INFO] skip non existing resourceDirectory E:\大三作业\mall-e3\mall-security\src\main\resources
+[INFO] skip non existing resourceDirectory E:\大三作业\mall-e3\mall-security\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-security ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-security ---
+[INFO] skip non existing resourceDirectory E:\大三作业\mall-e3\mall-security\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-security ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.5:test (default-test) @ mall-security ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] ---------------------< com.macro.mall:mall-admin >----------------------
+[INFO] Building mall-admin 1.0-SNAPSHOT                                   [5/5]
+[INFO]   from mall-admin\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mall-admin ---
+[INFO] Copying 3 resources from src\main\resources to target\classes
+[INFO] Copying 23 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-admin ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-admin ---
+[INFO] skip non existing resourceDirectory E:\大三作业\mall-e3\mall-admin\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-admin ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 1 source file with javac [debug parameters release 17] to target\test-classes
+[INFO] 
+[INFO] --- surefire:3.5.5:test (default-test) @ mall-admin ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[ERROR] Tests run: 7, Failures: 3, Errors: 2, Skipped: 0, Time elapsed: 2.695 s <<< FAILURE! -- in com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest
+[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.duplicateAndMissingIdsFollowDeletedRows -- Time elapsed: 0.036 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: 分类 40 的 attribute_count ==> expected: <2> but was: <1>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:590)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.assertCategoryCounts(PmsProductAttributeDeleteSpecTest.java:193)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.duplicateAndMissingIdsFollowDeletedRows(PmsProductAttributeDeleteSpecTest.java:117)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.emptyIdsReturnZeroWithoutTouchingMappers -- Time elapsed: 0.011 s <<< ERROR!
+java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0
+	at java.base/java.util.ImmutableCollections$ListN.get(ImmutableCollections.java:680)
+	at com.macro.mall.service.impl.PmsProductAttributeServiceImpl.delete(PmsProductAttributeServiceImpl.java:73)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.emptyIdsReturnZeroWithoutTouchingMappers(PmsProductAttributeDeleteSpecTest.java:138)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters -- Time elapsed: 0.013 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: 分类 30 的 param_count ==> expected: <0> but was: <1>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:590)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.assertCategoryCounts(PmsProductAttributeDeleteSpecTest.java:195)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters(PmsProductAttributeDeleteSpecTest.java:100)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.mixedCategoryBatchDecrementsEachCategoryOnce -- Time elapsed: 0.017 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: 分类 20 的 attribute_count ==> expected: <0> but was: <1>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:590)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.assertCategoryCounts(PmsProductAttributeDeleteSpecTest.java:193)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.mixedCategoryBatchDecrementsEachCategoryOnce(PmsProductAttributeDeleteSpecTest.java:86)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting -- Time elapsed: 0.010 s <<< ERROR!
+java.lang.NullPointerException: Cannot invoke "com.macro.mall.model.PmsProductAttribute.getType()" because "pmsProductAttribute" is null
+	at com.macro.mall.service.impl.PmsProductAttributeServiceImpl.delete(PmsProductAttributeServiceImpl.java:74)
+	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting(PmsProductAttributeDeleteSpecTest.java:127)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   PmsProductAttributeDeleteSpecTest.duplicateAndMissingIdsFollowDeletedRows:117->assertCategoryCounts:193 分类 40 的 attribute_count ==> expected: <2> but was: <1>
+[ERROR]   PmsProductAttributeDeleteSpecTest.mixedCategoryBatchDecrementsEachCategoryOnce:86->assertCategoryCounts:193 分类 20 的 attribute_count ==> expected: <0> but was: <1>
+[ERROR]   PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters:100->assertCategoryCounts:195 分类 30 的 param_count ==> expected: <0> but was: <1>
+[ERROR] Errors: 
+[ERROR]   PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting:127 ? NullPointer Cannot invoke "com.macro.mall.model.PmsProductAttribute.getType()" because "pmsProductAttribute" is null
+[ERROR]   PmsProductAttributeDeleteSpecTest.emptyIdsReturnZeroWithoutTouchingMappers:138 ? ArrayIndexOutOfBounds Index 0 out of bounds for length 0
+[INFO] 
+[ERROR] Tests run: 7, Failures: 3, Errors: 2, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for mall 1.0-SNAPSHOT:
+[INFO] 
+[INFO] mall ............................................... SUCCESS [  0.004 s]
+[INFO] mall-common ........................................ SUCCESS [  3.332 s]
+[INFO] mall-mbg ........................................... SUCCESS [  1.548 s]
+[INFO] mall-security ...................................... SUCCESS [  0.746 s]
+[INFO] mall-admin ......................................... FAILURE [ 14.283 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  20.621 s
+[INFO] Finished at: 2026-11-07T10:41:15+08:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.5:test (default-test) on project mall-admin: There are test failures.
+[ERROR] 
+[ERROR] See E:\大三作业\mall-e3\mall-admin\target\surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf :mall-admin

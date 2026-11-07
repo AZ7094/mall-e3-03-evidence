@@ -1,0 +1,102 @@
+diff --git a/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java b/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java
+index d8e21bc..653ea98 100644
+--- a/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java
++++ b/mall-admin/src/main/java/com/macro/mall/service/impl/PmsProductAttributeServiceImpl.java
+@@ -14,7 +14,13 @@ import org.springframework.beans.BeanUtils;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.stereotype.Service;
+ 
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
++import java.util.Map;
++import java.util.Objects;
++import java.util.Set;
+ 
+ /**
+  * 商品属性管理Service实现类
+@@ -69,31 +75,66 @@ public class PmsProductAttributeServiceImpl implements PmsProductAttributeServic
+ 
+     @Override
+     public int delete(List<Long> ids) {
+-        //获取分类
+-        PmsProductAttribute pmsProductAttribute = productAttributeMapper.selectByPrimaryKey(ids.get(0));
+-        Integer type = pmsProductAttribute.getType();
+-        PmsProductAttributeCategory pmsProductAttributeCategory = productAttributeCategoryMapper.selectByPrimaryKey(pmsProductAttribute.getProductAttributeCategoryId());
++        if (ids == null || ids.isEmpty()) {
++            return 0;
++        }
++        //重复 ID 只算一次，null 不参与查询
++        List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(ids));
++        distinctIds.removeIf(Objects::isNull);
++        if (distinctIds.isEmpty()) {
++            return 0;
++        }
+         PmsProductAttributeExample example = new PmsProductAttributeExample();
+-        example.createCriteria().andIdIn(ids);
++        example.createCriteria().andIdIn(distinctIds);
++        //先取实际存在的属性：不存在的 ID 不扣减，全部不存在时不产生任何写操作
++        List<PmsProductAttribute> attributes = productAttributeMapper.selectByExample(example);
++        if (attributes.isEmpty()) {
++            return 0;
++        }
++        //按“分类 + 类型”分别汇总，规格进 attributeCountMap，参数进 paramCountMap
++        Map<Long, Integer> attributeCountMap = new HashMap<>();
++        Map<Long, Integer> paramCountMap = new HashMap<>();
++        for (PmsProductAttribute attribute : attributes) {
++            Long categoryId = attribute.getProductAttributeCategoryId();
++            if (categoryId == null) {
++                continue;
++            }
++            if (Integer.valueOf(0).equals(attribute.getType())) {
++                attributeCountMap.merge(categoryId, 1, Integer::sum);
++            } else if (Integer.valueOf(1).equals(attribute.getType())) {
++                paramCountMap.merge(categoryId, 1, Integer::sum);
++            }
++        }
+         int count = productAttributeMapper.deleteByExample(example);
+-        //删除完成后修改数量
+-        if(type==0){
+-            if(pmsProductAttributeCategory.getAttributeCount()>=count){
+-                pmsProductAttributeCategory.setAttributeCount(pmsProductAttributeCategory.getAttributeCount()-count);
+-            }else{
+-                pmsProductAttributeCategory.setAttributeCount(0);
++        //删除完成后逐分类扣减，只更新确实有计数变化的分类
++        Set<Long> categoryIds = new LinkedHashSet<>();
++        categoryIds.addAll(attributeCountMap.keySet());
++        categoryIds.addAll(paramCountMap.keySet());
++        for (Long categoryId : categoryIds) {
++            PmsProductAttributeCategory category = productAttributeCategoryMapper.selectByPrimaryKey(categoryId);
++            if (category == null) {
++                continue;
++            }
++            Integer attributeCount = attributeCountMap.get(categoryId);
++            if (attributeCount != null) {
++                category.setAttributeCount(decrease(category.getAttributeCount(), attributeCount));
+             }
+-        }else if(type==1){
+-            if(pmsProductAttributeCategory.getParamCount()>=count){
+-                pmsProductAttributeCategory.setParamCount(pmsProductAttributeCategory.getParamCount()-count);
+-            }else{
+-                pmsProductAttributeCategory.setParamCount(0);
++            Integer paramCount = paramCountMap.get(categoryId);
++            if (paramCount != null) {
++                category.setParamCount(decrease(category.getParamCount(), paramCount));
+             }
++            productAttributeCategoryMapper.updateByPrimaryKey(category);
+         }
+-        productAttributeCategoryMapper.updateByPrimaryKey(pmsProductAttributeCategory);
+         return count;
+     }
+ 
++    private int decrease(Integer current, int delta) {
++        if (current == null) {
++            return 0;
++        }
++        return current >= delta ? current - delta : 0;
++    }
++
+     @Override
+     public List<ProductAttrInfo> getProductAttrInfo(Long productCategoryId) {
+         return productAttributeDao.getProductAttrInfo(productCategoryId);

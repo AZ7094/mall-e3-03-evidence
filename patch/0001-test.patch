@@ -1,0 +1,537 @@
+From 4968126653cb6472acfb350d1fe2011d9c290fb9 Mon Sep 17 00:00:00 2001
+From: Sunshin <2662058457@qq.com>
+Date: Sat, 7 Nov 2026 10:41:34 +0800
+Subject: [PATCH] test(e3-03): add failing spec for cross-category attribute
+ delete counts
+
+---
+ docs/e3-03/SPEC.md                            |  47 ++++
+ docs/e3-03/evidence/red-run-baseline.log      | 203 +++++++++++++++
+ docs/e3-03/evidence/test-file.sha256          |   1 +
+ .../PmsProductAttributeDeleteSpecTest.java    | 242 ++++++++++++++++++
+ 4 files changed, 493 insertions(+)
+ create mode 100644 docs/e3-03/SPEC.md
+ create mode 100644 docs/e3-03/evidence/red-run-baseline.log
+ create mode 100644 docs/e3-03/evidence/test-file.sha256
+ create mode 100644 mall-admin/src/test/java/com/macro/mall/service/impl/PmsProductAttributeDeleteSpecTest.java
+
+diff --git a/docs/e3-03/SPEC.md b/docs/e3-03/SPEC.md
+new file mode 100644
+index 0000000..70ba77c
+--- /dev/null
++++ b/docs/e3-03/SPEC.md
+@@ -0,0 +1,47 @@
++# E3-03 跨分类批量删除属性的计数 —— 规格与验收准则
++
++## 1. 用户故事
++
++作为商城后台的商品运营人员，我需要在商品属性列表里勾选任意多条属性（可能来自不同属性分类，也可能同时包含规格和参数）后一次删除；系统必须按每条被删属性真实的“所属分类 + 类型”分别扣减分类上的 `attribute_count` / `param_count`，不能把整批数量都算到第一条属性所在的分类上。
++
++## 2. 现状与缺陷（Issue #3）
++
++`PmsProductAttributeServiceImpl#delete(List<Long> ids)` 当前只查 `ids.get(0)` 得到一条属性，以它的分类与类型代表整批：
++
++- 跨分类删除时，只有第一条属性所在分类被扣减，其它分类计数不扣；
++- 同一分类同时删规格与参数时，只扣其中一种计数；
++- 列表中有不存在的 ID 时，返回的删除行数可能大于真实删除数，扣减也会多算；
++- `ids` 全部不存在、或 `ids` 为空时，分别触发空指针 / 下标越界异常。
++
++## 3. 验收准则（以 Issue #3 为准）
++
++- AC1：每个被删除的属性只扣减它自己的 `product_attribute_category_id` 对应分类、且按它自己的 `type`（0=规格、1=参数）扣减对应计数。
++- AC2：任一分类的 `attribute_count` / `param_count` 扣减后不得小于 0。
++- AC3：重复 ID 只计一次；不存在的 ID 不产生扣减；方法返回数据库实际删除的行数。
++- AC4：ID 全部不存在时返回 0，且不执行删除、不更新任何分类（Mock 与 MySQL 各验证一例）。
++- AC5：空列表（含 null 列表）返回 0，不访问任何 mapper。
++
++## 4. 不得修改的部分（硬约束）
++
++- 不修改数据库表结构、字段与初始化数据（`document/sql/mall.sql`）。
++- 不修改 MyBatis Generator 生成的 `PmsProductAttributeMapper` / `PmsProductAttributeCategoryMapper` / `PmsProductAttributeExample` 及 model 类。
++- 不修改 `PmsProductAttributeService` 接口签名与 `PmsProductAttributeController` 的 HTTP 契约（`POST /productAttribute/delete`）。
++- 不改变 `create` 的既有计数语义；本次只修 `delete`。
++
++## 5. 规格测试（先行编写，改前应失败）
++
++1. `mixedCategoryBatchDecrementsEachCategoryOnce`：跨两个分类各删一条规格，两分类都归 0；基线只扣第一个分类 → 红。
++2. `sameCategorySpecAndParamDecrementSeparateCounters`：同一分类删一条规格 + 一条参数，两个计数都归 0；基线只扣规格计数 → 红。
++3. `duplicateAndMissingIdsFollowDeletedRows`：重复 ID + 不存在 ID 混合，返回 2，只扣真实存在的两条；基线按首条属性扣 2 → 红。
++4. `allMissingIdsReturnZeroWithoutWriting`：全部不存在，返回 0，不删除、不更新分类；基线 NPE → 红。
++5. `emptyIdsReturnZeroWithoutTouchingMappers`：空列表返回 0，不访问 mapper；基线下标越界 → 红。
++6. `duplicateOnlyIdsAreCountedOnce`：同一 ID 传两次只删一次、只扣一；改前改后都应为绿（回归）。
++7. `countsNeverGoNegative`：计数已为 0 时删除一条，仍为 0；改前改后都应为绿（回归）。
++8. MySQL 集成测试：真实数据库、真实事务中验证 AC1–AC4（另见 `PmsProductAttributeDeleteMysqlTest`）。
++
++## 6. 验证边界（明确不证明什么）
++
++- 不验证并发删除下的计数竞争（无行锁/乐观锁设计）。
++- 不验证 `@Transactional` 代理在异常回滚时的行为（单元测试直接 new service，集成测试用测试事务）。
++- 不验证 HTTP 认证/鉴权链，只验证 service 方法契约。
++- 不覆盖 `type` 为 null 或其它值时的业务语义（规格未定义，行为保持“不扣减任何计数”）。
+diff --git a/docs/e3-03/evidence/red-run-baseline.log b/docs/e3-03/evidence/red-run-baseline.log
+new file mode 100644
+index 0000000..0796442
+--- /dev/null
++++ b/docs/e3-03/evidence/red-run-baseline.log
+@@ -0,0 +1,203 @@
++[INFO] Scanning for projects...
++[INFO] ------------------------------------------------------------------------
++[INFO] Reactor Build Order:
++[INFO] 
++[INFO] mall                                                               [pom]
++[INFO] mall-common                                                        [jar]
++[INFO] mall-mbg                                                           [jar]
++[INFO] mall-security                                                      [jar]
++[INFO] mall-admin                                                         [jar]
++[INFO] 
++[INFO] ------------------------< com.macro.mall:mall >-------------------------
++[INFO] Building mall 1.0-SNAPSHOT                                         [1/5]
++[INFO]   from pom.xml
++[INFO] --------------------------------[ pom ]---------------------------------
++[INFO] 
++[INFO] ---------------------< com.macro.mall:mall-common >---------------------
++[INFO] Building mall-common 1.0-SNAPSHOT                                  [2/5]
++[INFO]   from mall-common\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-common ---
++[INFO] Copying 0 resource from src\main\resources to target\classes
++[INFO] Copying 1 resource from src\main\resources to target\classes
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-common ---
++[INFO] Nothing to compile - all classes are up to date.
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-common ---
++[INFO] skip non existing resourceDirectory E:\������ҵ\mall-e3\mall-common\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-common ---
++[INFO] No sources to compile
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-common ---
++[INFO] No tests to run.
++[INFO] 
++[INFO] ----------------------< com.macro.mall:mall-mbg >-----------------------
++[INFO] Building mall-mbg 1.0-SNAPSHOT                                     [3/5]
++[INFO]   from mall-mbg\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-mbg ---
++[INFO] Copying 0 resource from src\main\resources to target\classes
++[INFO] Copying 78 resources from src\main\resources to target\classes
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-mbg ---
++[INFO] Nothing to compile - all classes are up to date.
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-mbg ---
++[INFO] skip non existing resourceDirectory E:\������ҵ\mall-e3\mall-mbg\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-mbg ---
++[INFO] No sources to compile
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-mbg ---
++[INFO] No tests to run.
++[INFO] 
++[INFO] --------------------< com.macro.mall:mall-security >--------------------
++[INFO] Building mall-security 1.0-SNAPSHOT                                [4/5]
++[INFO]   from mall-security\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-security ---
++[INFO] skip non existing resourceDirectory E:\������ҵ\mall-e3\mall-security\src\main\resources
++[INFO] skip non existing resourceDirectory E:\������ҵ\mall-e3\mall-security\src\main\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-security ---
++[INFO] Nothing to compile - all classes are up to date.
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-security ---
++[INFO] skip non existing resourceDirectory E:\������ҵ\mall-e3\mall-security\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-security ---
++[INFO] No sources to compile
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-security ---
++[INFO] No tests to run.
++[INFO] 
++[INFO] ---------------------< com.macro.mall:mall-admin >----------------------
++[INFO] Building mall-admin 1.0-SNAPSHOT                                   [5/5]
++[INFO]   from mall-admin\pom.xml
++[INFO] --------------------------------[ jar ]---------------------------------
++[INFO] 
++[INFO] --- resources:3.3.1:resources (default-resources) @ mall-admin ---
++[INFO] Copying 3 resources from src\main\resources to target\classes
++[INFO] Copying 23 resources from src\main\resources to target\classes
++[INFO] 
++[INFO] --- compiler:3.14.1:compile (default-compile) @ mall-admin ---
++[INFO] Nothing to compile - all classes are up to date.
++[INFO] 
++[INFO] --- resources:3.3.1:testResources (default-testResources) @ mall-admin ---
++[INFO] skip non existing resourceDirectory E:\������ҵ\mall-e3\mall-admin\src\test\resources
++[INFO] 
++[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ mall-admin ---
++[INFO] Recompiling the module because of changed source code.
++[INFO] Compiling 1 source file with javac [debug parameters release 17] to target\test-classes
++[INFO] 
++[INFO] --- surefire:3.5.5:test (default-test) @ mall-admin ---
++[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
++[INFO] 
++[INFO] -------------------------------------------------------
++[INFO]  T E S T S
++[INFO] -------------------------------------------------------
++[INFO] Running com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest
++OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
++[ERROR] Tests run: 7, Failures: 3, Errors: 2, Skipped: 0, Time elapsed: 2.695 s <<< FAILURE! -- in com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest
++[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.duplicateAndMissingIdsFollowDeletedRows -- Time elapsed: 0.036 s <<< FAILURE!
++org.opentest4j.AssertionFailedError: ���� 40 �� attribute_count ==> expected: <2> but was: <1>
++	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
++	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
++	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
++	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
++	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:590)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.assertCategoryCounts(PmsProductAttributeDeleteSpecTest.java:193)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.duplicateAndMissingIdsFollowDeletedRows(PmsProductAttributeDeleteSpecTest.java:117)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++
++[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.emptyIdsReturnZeroWithoutTouchingMappers -- Time elapsed: 0.011 s <<< ERROR!
++java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0
++	at java.base/java.util.ImmutableCollections$ListN.get(ImmutableCollections.java:680)
++	at com.macro.mall.service.impl.PmsProductAttributeServiceImpl.delete(PmsProductAttributeServiceImpl.java:73)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.emptyIdsReturnZeroWithoutTouchingMappers(PmsProductAttributeDeleteSpecTest.java:138)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++
++[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters -- Time elapsed: 0.013 s <<< FAILURE!
++org.opentest4j.AssertionFailedError: ���� 30 �� param_count ==> expected: <0> but was: <1>
++	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
++	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
++	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
++	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
++	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:590)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.assertCategoryCounts(PmsProductAttributeDeleteSpecTest.java:195)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters(PmsProductAttributeDeleteSpecTest.java:100)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++
++[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.mixedCategoryBatchDecrementsEachCategoryOnce -- Time elapsed: 0.017 s <<< FAILURE!
++org.opentest4j.AssertionFailedError: ���� 20 �� attribute_count ==> expected: <0> but was: <1>
++	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
++	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
++	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
++	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
++	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:590)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.assertCategoryCounts(PmsProductAttributeDeleteSpecTest.java:193)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.mixedCategoryBatchDecrementsEachCategoryOnce(PmsProductAttributeDeleteSpecTest.java:86)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++
++[ERROR] com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting -- Time elapsed: 0.010 s <<< ERROR!
++java.lang.NullPointerException: Cannot invoke "com.macro.mall.model.PmsProductAttribute.getType()" because "pmsProductAttribute" is null
++	at com.macro.mall.service.impl.PmsProductAttributeServiceImpl.delete(PmsProductAttributeServiceImpl.java:74)
++	at com.macro.mall.service.impl.PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting(PmsProductAttributeDeleteSpecTest.java:127)
++	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
++
++[INFO] 
++[INFO] Results:
++[INFO] 
++[ERROR] Failures: 
++[ERROR]   PmsProductAttributeDeleteSpecTest.duplicateAndMissingIdsFollowDeletedRows:117->assertCategoryCounts:193 ���� 40 �� attribute_count ==> expected: <2> but was: <1>
++[ERROR]   PmsProductAttributeDeleteSpecTest.mixedCategoryBatchDecrementsEachCategoryOnce:86->assertCategoryCounts:193 ���� 20 �� attribute_count ==> expected: <0> but was: <1>
++[ERROR]   PmsProductAttributeDeleteSpecTest.sameCategorySpecAndParamDecrementSeparateCounters:100->assertCategoryCounts:195 ���� 30 �� param_count ==> expected: <0> but was: <1>
++[ERROR] Errors: 
++[ERROR]   PmsProductAttributeDeleteSpecTest.allMissingIdsReturnZeroWithoutWriting:127 ? NullPointer Cannot invoke "com.macro.mall.model.PmsProductAttribute.getType()" because "pmsProductAttribute" is null
++[ERROR]   PmsProductAttributeDeleteSpecTest.emptyIdsReturnZeroWithoutTouchingMappers:138 ? ArrayIndexOutOfBounds Index 0 out of bounds for length 0
++[INFO] 
++[ERROR] Tests run: 7, Failures: 3, Errors: 2, Skipped: 0
++[INFO] 
++[INFO] ------------------------------------------------------------------------
++[INFO] Reactor Summary for mall 1.0-SNAPSHOT:
++[INFO] 
++[INFO] mall ............................................... SUCCESS [  0.004 s]
++[INFO] mall-common ........................................ SUCCESS [  3.332 s]
++[INFO] mall-mbg ........................................... SUCCESS [  1.548 s]
++[INFO] mall-security ...................................... SUCCESS [  0.746 s]
++[INFO] mall-admin ......................................... FAILURE [ 14.283 s]
++[INFO] ------------------------------------------------------------------------
++[INFO] BUILD FAILURE
++[INFO] ------------------------------------------------------------------------
++[INFO] Total time:  20.621 s
++[INFO] Finished at: 2026-11-07T10:41:15+08:00
++[INFO] ------------------------------------------------------------------------
++[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.5:test (default-test) on project mall-admin: There are test failures.
++[ERROR] 
++[ERROR] See E:\������ҵ\mall-e3\mall-admin\target\surefire-reports for the individual test results.
++[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
++[ERROR] -> [Help 1]
++[ERROR] 
++[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
++[ERROR] Re-run Maven using the -X switch to enable full debug logging.
++[ERROR] 
++[ERROR] For more information about the errors and possible solutions, please read the following articles:
++[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
++[ERROR] 
++[ERROR] After correcting the problems, you can resume the build with the command
++[ERROR]   mvn <args> -rf :mall-admin
+diff --git a/docs/e3-03/evidence/test-file.sha256 b/docs/e3-03/evidence/test-file.sha256
+new file mode 100644
+index 0000000..a0d6717
+--- /dev/null
++++ b/docs/e3-03/evidence/test-file.sha256
+@@ -0,0 +1 @@
++1237d982e396ef788d25eab6084064f767c592f3434eb1b14826816786b81d5e *mall-admin/src/test/java/com/macro/mall/service/impl/PmsProductAttributeDeleteSpecTest.java
+diff --git a/mall-admin/src/test/java/com/macro/mall/service/impl/PmsProductAttributeDeleteSpecTest.java b/mall-admin/src/test/java/com/macro/mall/service/impl/PmsProductAttributeDeleteSpecTest.java
+new file mode 100644
+index 0000000..299e1b2
+--- /dev/null
++++ b/mall-admin/src/test/java/com/macro/mall/service/impl/PmsProductAttributeDeleteSpecTest.java
+@@ -0,0 +1,242 @@
++package com.macro.mall.service.impl;
++
++import com.macro.mall.dao.PmsProductAttributeDao;
++import com.macro.mall.mapper.PmsProductAttributeCategoryMapper;
++import com.macro.mall.mapper.PmsProductAttributeMapper;
++import com.macro.mall.model.PmsProductAttribute;
++import com.macro.mall.model.PmsProductAttributeCategory;
++import com.macro.mall.model.PmsProductAttributeExample;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.DisplayName;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.extension.ExtendWith;
++import org.mockito.InjectMocks;
++import org.mockito.Mock;
++import org.mockito.junit.jupiter.MockitoExtension;
++import org.mockito.junit.jupiter.MockitoSettings;
++import org.mockito.quality.Strictness;
++
++import java.util.ArrayList;
++import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Map;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertNotNull;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.anyLong;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++/**
++ * E3-03 规格测试：跨分类批量删除属性时按“分类 + 类型”分别扣减计数。
++ * 该测试同时可在修复前/后运行：修复前走 selectByPrimaryKey，修复后走 selectByExample。
++ */
++@ExtendWith(MockitoExtension.class)
++@MockitoSettings(strictness = Strictness.LENIENT)
++class PmsProductAttributeDeleteSpecTest {
++
++    @Mock
++    private PmsProductAttributeMapper productAttributeMapper;
++    @Mock
++    private PmsProductAttributeCategoryMapper productAttributeCategoryMapper;
++    @Mock
++    private PmsProductAttributeDao productAttributeDao;
++
++    @InjectMocks
++    private PmsProductAttributeServiceImpl service;
++
++    private final Map<Long, PmsProductAttribute> attributeTable = new LinkedHashMap<>();
++    private final Map<Long, PmsProductAttributeCategory> categoryTable = new LinkedHashMap<>();
++
++    @BeforeEach
++    void setUp() {
++        attributeTable.clear();
++        categoryTable.clear();
++        when(productAttributeMapper.selectByPrimaryKey(anyLong()))
++                .thenAnswer(invocation -> attributeTable.get(invocation.getArgument(0, Long.class)));
++        when(productAttributeMapper.selectByExample(any(PmsProductAttributeExample.class)))
++                .thenAnswer(invocation -> selectRows(invocation.getArgument(0)));
++        when(productAttributeMapper.deleteByExample(any(PmsProductAttributeExample.class)))
++                .thenAnswer(invocation -> deleteRows(invocation.getArgument(0)));
++        when(productAttributeCategoryMapper.selectByPrimaryKey(anyLong()))
++                .thenAnswer(invocation -> categoryTable.get(invocation.getArgument(0, Long.class)));
++        when(productAttributeCategoryMapper.updateByPrimaryKey(any(PmsProductAttributeCategory.class)))
++                .thenAnswer(invocation -> {
++                    PmsProductAttributeCategory category = invocation.getArgument(0);
++                    categoryTable.put(category.getId(), category);
++                    return 1;
++                });
++    }
++
++    @Test
++    @DisplayName("跨分类批量删除：每个分类各扣各的，不能只扣第一个分类")
++    void mixedCategoryBatchDecrementsEachCategoryOnce() {
++        category(10L, 1, 0);
++        attribute(101L, 10L, 0);
++        category(20L, 1, 0);
++        attribute(201L, 20L, 0);
++
++        int deleted = service.delete(List.of(101L, 201L));
++
++        assertEquals(2, deleted, "应返回实际删除的 2 行");
++        assertCategoryCounts(10L, 0, 0);
++        assertCategoryCounts(20L, 0, 0);
++        assertEquals(0, attributeTable.size(), "两条属性都应已删除");
++    }
++
++    @Test
++    @DisplayName("同一分类同时删规格和参数：两个计数分别扣减")
++    void sameCategorySpecAndParamDecrementSeparateCounters() {
++        category(30L, 1, 1);
++        attribute(301L, 30L, 0);
++        attribute(302L, 30L, 1);
++
++        int deleted = service.delete(List.of(301L, 302L));
++
++        assertEquals(2, deleted);
++        assertCategoryCounts(30L, 0, 0);
++        assertEquals(0, attributeTable.size());
++    }
++
++    @Test
++    @DisplayName("重复 ID 只算一次，不存在的 ID 不扣减，返回实际删除行数")
++    void duplicateAndMissingIdsFollowDeletedRows() {
++        category(40L, 3, 0);
++        attribute(401L, 40L, 0);
++        attribute(402L, 40L, 0);
++        attribute(403L, 40L, 0);
++        category(50L, 1, 0);
++        attribute(501L, 50L, 0);
++
++        int deleted = service.delete(List.of(401L, 401L, 999L, 501L));
++
++        assertEquals(2, deleted);
++        assertCategoryCounts(40L, 2, 0);
++        assertCategoryCounts(50L, 0, 0);
++        assertEquals(2, attributeTable.size(), "只应删掉 401 与 501，402/403 保留");
++    }
++
++    @Test
++    @DisplayName("ID 全部不存在：返回 0，不删除、不更新分类")
++    void allMissingIdsReturnZeroWithoutWriting() {
++        category(60L, 2, 3);
++
++        int deleted = service.delete(List.of(999L, 1000L));
++
++        assertEquals(0, deleted);
++        assertCategoryCounts(60L, 2, 3);
++        verify(productAttributeMapper, never()).deleteByExample(any());
++        verify(productAttributeCategoryMapper, never()).updateByPrimaryKey(any());
++    }
++
++    @Test
++    @DisplayName("空 ID 列表：返回 0，不访问任何 mapper")
++    void emptyIdsReturnZeroWithoutTouchingMappers() {
++        int deleted = service.delete(List.of());
++
++        assertEquals(0, deleted);
++        verify(productAttributeMapper, never()).selectByPrimaryKey(anyLong());
++        verify(productAttributeMapper, never()).selectByExample(any());
++        verify(productAttributeMapper, never()).deleteByExample(any());
++        verify(productAttributeCategoryMapper, never()).selectByPrimaryKey(anyLong());
++        verify(productAttributeCategoryMapper, never()).updateByPrimaryKey(any());
++    }
++
++    @Test
++    @DisplayName("回归：同一个 ID 传两次只删一次、只扣一")
++    void duplicateOnlyIdsAreCountedOnce() {
++        category(70L, 2, 0);
++        attribute(701L, 70L, 0);
++        attribute(702L, 70L, 0);
++
++        int deleted = service.delete(List.of(701L, 701L));
++
++        assertEquals(1, deleted);
++        assertCategoryCounts(70L, 1, 0);
++        assertEquals(1, attributeTable.size());
++    }
++
++    @Test
++    @DisplayName("回归：计数已为 0 时删除属性，计数保持 0 不出现负数")
++    void countsNeverGoNegative() {
++        category(80L, 0, 0);
++        attribute(801L, 80L, 0);
++
++        int deleted = service.delete(List.of(801L));
++
++        assertEquals(1, deleted);
++        assertCategoryCounts(80L, 0, 0);
++    }
++
++    private void attribute(long id, long categoryId, int type) {
++        PmsProductAttribute attribute = new PmsProductAttribute();
++        attribute.setId(id);
++        attribute.setProductAttributeCategoryId(categoryId);
++        attribute.setType(type);
++        attributeTable.put(id, attribute);
++    }
++
++    private void category(long id, int attributeCount, int paramCount) {
++        PmsProductAttributeCategory category = new PmsProductAttributeCategory();
++        category.setId(id);
++        category.setAttributeCount(attributeCount);
++        category.setParamCount(paramCount);
++        categoryTable.put(id, category);
++    }
++
++    private void assertCategoryCounts(long id, int attributeCount, int paramCount) {
++        PmsProductAttributeCategory category = categoryTable.get(id);
++        assertNotNull(category, "分类 " + id + " 应存在");
++        assertEquals(Integer.valueOf(attributeCount), category.getAttributeCount(),
++                "分类 " + id + " 的 attribute_count");
++        assertEquals(Integer.valueOf(paramCount), category.getParamCount(),
++                "分类 " + id + " 的 param_count");
++    }
++
++    private List<PmsProductAttribute> selectRows(PmsProductAttributeExample example) {
++        List<Long> ids = idInValues(example);
++        List<PmsProductAttribute> rows = new ArrayList<>();
++        if (ids == null) {
++            rows.addAll(attributeTable.values());
++            return rows;
++        }
++        for (Long id : new LinkedHashSet<>(ids)) {
++            PmsProductAttribute row = attributeTable.get(id);
++            if (row != null) {
++                rows.add(row);
++            }
++        }
++        return rows;
++    }
++
++    private int deleteRows(PmsProductAttributeExample example) {
++        List<Long> ids = idInValues(example);
++        if (ids == null) {
++            int size = attributeTable.size();
++            attributeTable.clear();
++            return size;
++        }
++        int removed = 0;
++        for (Long id : new LinkedHashSet<>(ids)) {
++            if (attributeTable.remove(id) != null) {
++                removed++;
++            }
++        }
++        return removed;
++    }
++
++    @SuppressWarnings("unchecked")
++    private List<Long> idInValues(PmsProductAttributeExample example) {
++        for (PmsProductAttributeExample.Criteria criteria : example.getOredCriteria()) {
++            for (PmsProductAttributeExample.Criterion criterion : criteria.getCriteria()) {
++                if ("id in".equals(criterion.getCondition())) {
++                    return (List<Long>) criterion.getValue();
++                }
++            }
++        }
++        return null;
++    }
++}
+-- 
+2.56.0.windows.2
+
